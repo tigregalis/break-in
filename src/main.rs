@@ -1,28 +1,35 @@
 #![feature(iterator_fold_self)]
-use bevy::prelude::*;
 use bevy::render::mesh::shape;
+use bevy::{prelude::*, window::WindowMode};
 use rand::{thread_rng, Rng};
+
+use break_in::window;
 
 fn main() {
     App::build()
-        .add_plugins(DefaultPlugins)
-        .add_resource(ClearColor(Color::BLACK))
-        .add_resource(Score(0))
         .add_resource(WindowDescriptor {
             title: TITLE.into(),
+            mode: WindowMode::BorderlessFullscreen,
             ..Default::default()
         })
+        .add_plugins(DefaultPlugins)
+        .init_resource::<window::PrevWindow>()
+        .add_resource(ClearColor(Color::BLACK))
+        .add_resource(Score(0))
         .add_resource(Paused(false)) // temporary
         .add_event::<Collision>()
         .add_startup_system_to_stage(bevy::app::startup_stage::PRE_STARTUP, setup.system())
         .add_startup_system(start.system()) // temporary
+        .add_system(window::track_window.system())
         .add_system(copy_transforms.system())
         .add_system(toggle_paused.system())
+        .add_system(toggle_screen.system())
         .add_system(input.system())
         .add_system(paddle_movement.system())
         .add_system(ball_movement.system())
         .add_system(collisions.system())
         .add_system(handle_collisions.system())
+        .add_system(window::compare_window.system())
         .run();
 }
 
@@ -37,8 +44,8 @@ const BRICK_MIN_CIRCUMFERENTIAL_GAP: f32 = 10.;
 /// Gap between rings
 const BRICK_RING_GAP: f32 = 10.;
 /// Number of rings
-// const BRICK_RINGS: usize = 5;
-const BRICK_RINGS: usize = 1;
+const BRICK_RINGS: usize = 5;
+// const BRICK_RINGS: usize = 1;
 const BRICK_THICKNESS: f32 = 20.;
 const BRICK_WIDTH: f32 = 40.;
 const PADDLE_RING_RADIUS: f32 = 320.;
@@ -326,7 +333,7 @@ fn ball_movement(
     for (mut transform, mut ball) in ball_query.iter_mut() {
         let new_translation = transform.translation.truncate() + ball.velocity * dt;
         // temporary
-        if new_translation.length() >= PADDLE_RING_RADIUS - PADDLE_THICKNESS {
+        if new_translation.length_squared() >= square(PADDLE_RING_RADIUS - PADDLE_THICKNESS) {
             // ball.velocity = -ball.velocity;
             let n = transform.translation.truncate().normalize();
             let dot = ball.velocity.dot(n);
@@ -581,6 +588,17 @@ fn toggle_paused(input: Res<Input<KeyCode>>, mut paused: ResMut<Paused>) {
     }
 }
 
+// temporary
+fn toggle_screen(input: Res<Input<KeyCode>>, mut window_descriptor: ResMut<WindowDescriptor>) {
+    if input.just_pressed(KeyCode::Escape) {
+        window_descriptor.mode = match window_descriptor.mode {
+            WindowMode::Windowed => WindowMode::BorderlessFullscreen,
+            WindowMode::BorderlessFullscreen => WindowMode::Windowed,
+            _ => unreachable!(),
+        }
+    }
+}
+
 // Game over systems
 
 fn end() {
@@ -590,9 +608,10 @@ fn end() {
 
 // Utilities
 
+// consider r-star: https://docs.rs/rstar/0.8.2/rstar/struct.RTree.html
 fn in_range(position_a: Vec2, radius_a: f32, position_b: Vec2, radius_b: f32) -> bool {
     let vector: Vec2 = position_a - position_b;
-    vector.length() <= radius_a + radius_b
+    vector.length_squared() <= square(radius_a + radius_b)
 }
 
 /// https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Line_defined_by_two_points
@@ -644,21 +663,17 @@ impl Iterator for RectangleSideIterator {
     }
 }
 
+fn square(number: f32) -> f32 {
+    number * number
+}
+
 /// https://gamedev.stackexchange.com/questions/86755/how-to-calculate-corner-positions-marks-of-a-rotated-tilted-rectangle
-/// - `rotation` is a Quaternion, with the Z axis assumed as the angle of rotation
+/// - `rotation` is the angle of rotation
 /// - `corner` is relative to the centre of the rectangle
 fn point_rotated(corner: Vec2, rotation: f32) -> Vec2 {
     let rc = rotation.cos();
     let rs = rotation.sin();
     Vec2::new(corner.x * rc - corner.y * rs, corner.x * rs + corner.y * rc)
-}
-
-#[test]
-fn test_point_rotated() {
-    // counter-clockwise rotation by 90 degrees
-    let rotation = Quat::from_rotation_z(HALF_PI);
-    let point = Vec2::new(1., 1.);
-    assert_eq!(point_rotated(point, rotation), Vec2::new(-1., 1.));
 }
 
 fn angle_from_xy(translation: Vec2) -> f32 {
@@ -707,7 +722,7 @@ fn wrap_negpi_pi(num: f32) -> f32 {
 }
 
 /// Keep the number within the half-open range [0, TWO_PI)
-fn wrap_zero_twopi(num: f32) -> f32 {
+fn _wrap_zero_twopi(num: f32) -> f32 {
     wrap(num, 0., TWO_PI)
 }
 
@@ -733,3 +748,9 @@ struct PastTransform(Transform);
 
 #[derive(Default)]
 struct FutureTransform(Transform);
+
+#[test]
+fn test_str() {
+    let s = std::str::from_utf8(&[10, 50, 30]).unwrap().trim();
+    println!(s);
+}
