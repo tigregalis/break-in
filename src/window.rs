@@ -1,27 +1,7 @@
 use bevy::{prelude::*, window::WindowMode};
-// pub struct WindowDescriptor {
-//     pub width: f32,
-//     pub height: f32,
-//     pub scale_factor_override: Option<f64>,
-//     pub title: String,
-//     pub vsync: bool,
-//     pub resizable: bool,
-//     pub decorations: bool,
-//     pub cursor_visible: bool,
-//     pub cursor_locked: bool,
-//     pub mode: WindowMode,
-//     #[cfg(target_arch = "wasm32")]
-//     pub canvas: Option<String>,
-// }
-
-// pub enum WindowMode {
-//     Windowed,
-//     BorderlessFullscreen,
-//     Fullscreen { use_size: bool },
-// }
 
 /// This system will then change the title during execution
-fn change_title(time: Res<Time>, mut windows: ResMut<Windows>) {
+fn _change_title(time: Res<Time>, mut windows: ResMut<Windows>) {
     let window = windows.get_primary_mut().unwrap();
     window.set_title(format!(
         "Seconds since startup: {}",
@@ -30,7 +10,7 @@ fn change_title(time: Res<Time>, mut windows: ResMut<Windows>) {
 }
 
 /// This system toggles the cursor's visibility when the space bar is pressed
-fn toggle_cursor(input: Res<Input<KeyCode>>, mut windows: ResMut<Windows>) {
+fn _toggle_cursor(input: Res<Input<KeyCode>>, mut windows: ResMut<Windows>) {
     let window = windows.get_primary_mut().unwrap();
     if input.just_pressed(KeyCode::Space) {
         window.set_cursor_lock_mode(!window.cursor_locked());

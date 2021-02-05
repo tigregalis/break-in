@@ -420,7 +420,7 @@ struct CollisionPoint;
 #[allow(clippy::too_many_arguments)]
 fn handle_collisions(
     // mut paused: ResMut<Paused>,
-    time: Res<Time>,
+    _time: Res<Time>,
     mut collisions: EventReader<Collision>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     existing_points: Query<Entity, With<CollisionPoint>>,
@@ -493,7 +493,7 @@ fn handle_collisions(
 
     for (ball_entity, ([a, b], _distance, _collided_entity)) in map.drain() {
         match ball_query.get_mut(ball_entity) {
-            Ok((entity, mut ball, mut transform, past_transform)) => {
+            Ok((_entity, mut ball, mut transform, past_transform)) => {
                 // first, backtrack 1 tick
                 *transform = past_transform.0;
                 // now update the velocity
@@ -601,7 +601,7 @@ fn toggle_screen(input: Res<Input<KeyCode>>, mut window_descriptor: ResMut<Windo
 
 // Game over systems
 
-fn end() {
+fn _end() {
     // despawn entities
     // reset score
 }
@@ -748,9 +748,3 @@ struct PastTransform(Transform);
 
 #[derive(Default)]
 struct FutureTransform(Transform);
-
-#[test]
-fn test_str() {
-    let s = std::str::from_utf8(&[10, 50, 30]).unwrap().trim();
-    println!(s);
-}
