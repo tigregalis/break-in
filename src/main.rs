@@ -1,9 +1,10 @@
+#![allow(clippy::many_single_char_names)]
 #![feature(iterator_fold_self)]
-use bevy::render::mesh::shape;
+use bevy::render::{mesh::Indices, pipeline::PrimitiveTopology};
 use bevy::{prelude::*, window::WindowMode};
 use rand::{thread_rng, Rng};
 
-use break_in::window;
+use break_in::{color, window};
 
 fn main() {
     App::build()
@@ -16,14 +17,17 @@ fn main() {
         .init_resource::<window::PrevWindow>()
         .add_resource(ClearColor(Color::BLACK))
         .add_resource(Score(0))
+        .add_resource(DilatedTime::new(BASE_DILATION))
         .add_resource(Paused(false)) // temporary
         .add_event::<Collision>()
         .add_startup_system_to_stage(bevy::app::startup_stage::PRE_STARTUP, setup.system())
         .add_startup_system(start.system()) // temporary
         .add_system(window::track_window.system())
+        .add_system(dilate_time.system())
         .add_system(copy_transforms.system())
         .add_system(toggle_paused.system())
         .add_system(toggle_screen.system())
+        .add_system(change_dilation.system())
         .add_system(input.system())
         .add_system(paddle_movement.system())
         .add_system(ball_movement.system())
@@ -35,7 +39,7 @@ fn main() {
 
 // Config constants
 
-const BALL_RADIUS: f32 = 5.;
+const BALL_RADIUS: f32 = 10.;
 const BALL_VELOCITY: [f32; 2] = [100.; 2];
 /// Space in the centre to leave empty
 const BRICK_EMPTY_RING_RADIUS: f32 = 15.;
@@ -53,11 +57,11 @@ const PADDLE_THICKNESS: f32 = 20.;
 const PADDLE_WIDTH: f32 = 80.;
 const PADDLE_SPEED: f32 = PI;
 const HITS_LEFT_VS_COLOR: [Color; 5] = [
-    Color::RED,
-    Color::PURPLE,
-    Color::DARK_GREEN,
-    Color::BLUE,
-    Color::ORANGE_RED,
+    color::CADET_BLUE,
+    color::SPRING_GREEN,
+    color::YELLOW,
+    color::ORANGE,
+    color::RED,
 ];
 const TITLE: &str = "Break-in";
 
@@ -66,6 +70,7 @@ const TITLE: &str = "Break-in";
 use std::{collections::HashMap, f32::consts::PI, usize};
 const TWO_PI: f32 = 2. * PI;
 const HALF_PI: f32 = PI / 2.;
+const BASE_DILATION: f32 = 0.5;
 
 // Components
 
@@ -115,6 +120,21 @@ struct Collider {
     radius: f32,
 }
 
+struct DilatedTime {
+    dt: f32,
+    dilation: f32,
+}
+
+impl DilatedTime {
+    fn new(dilation: f32) -> Self {
+        Self { dt: 0., dilation }
+    }
+
+    fn delta_seconds(&self) -> f32 {
+        self.dt
+    }
+}
+
 // temporary
 struct Paused(bool);
 
@@ -153,7 +173,7 @@ fn setup(
                         style: TextStyle {
                             font: assets.load("fonts/FiraSans-Bold.ttf"),
                             font_size: 40.,
-                            color: Color::YELLOW,
+                            color: color::YELLOW,
                         },
                     },
                     TextSection {
@@ -161,7 +181,7 @@ fn setup(
                         style: TextStyle {
                             font: assets.load("fonts/JetBrainsMono-ExtraBold.ttf"),
                             font_size: 40.,
-                            color: Color::ALICE_BLUE,
+                            color: color::ALICE_BLUE,
                         },
                     },
                 ],
@@ -208,11 +228,6 @@ fn start(
                         ..Default::default()
                     },
                     material: colors.0[hits_left].clone_weak(),
-                    // material: if ring == 0 && brick == 1 {
-                    //     materials.add(Color::WHITE.into())
-                    // } else {
-                    //     colors.0[hits_left].clone_weak()
-                    // },
                     transform: Transform {
                         translation,
                         rotation,
@@ -233,7 +248,8 @@ fn start(
             let text = commands
                 .spawn(Text2dBundle {
                     text: Text::with_section(
-                        format!("{:?}", entity.id()),
+                        // format!("{:?}", entity.id()),
+                        format!("{}", hits_left),
                         TextStyle {
                             font: assets.load("fonts/JetBrainsMono-ExtraBold.ttf"),
                             font_size: 15.0,
@@ -258,12 +274,12 @@ fn start(
                 size: Vec2::new(2. * BALL_RADIUS, 2. * BALL_RADIUS),
                 ..Default::default()
             },
-            material: materials.add(Color::rgba(0.4, 1.0, 0.7, 0.5).into()),
+            material: materials.add(color::AQUAMARINE.into()),
             transform: Transform {
                 translation: Vec3::new(0., 0., 0.),
                 ..Default::default()
             },
-            mesh: meshes.add(Mesh::from(shape::Icosphere::default())),
+            mesh: meshes.add(polygon(0.5, 360)),
             ..Default::default()
         })
         .with(Ball {
@@ -290,7 +306,7 @@ fn start(
                 size: Vec2::new(PADDLE_WIDTH, PADDLE_THICKNESS),
                 ..Default::default()
             },
-            material: materials.add(Color::GRAY.into()),
+            material: materials.add(color::GREY.into()),
             transform: Transform {
                 translation,
                 rotation,
@@ -306,6 +322,11 @@ fn start(
 }
 
 // Play systems (physics)
+
+fn dilate_time(time: Res<Time>, mut dilated_time: ResMut<DilatedTime>) {
+    let dt = time.delta_seconds() * dilated_time.dilation;
+    dilated_time.dt = dt;
+}
 
 /// At the start of the tick, copy the previous positions / rotations.
 /// This will be used:
@@ -324,7 +345,7 @@ fn copy_transforms(
 fn ball_movement(
     paused: Res<Paused>,
     mut ball_query: Query<(&mut Transform, &mut Ball)>,
-    time: Res<Time>,
+    time: Res<DilatedTime>,
 ) {
     let dt = time.delta_seconds();
     if paused.0 {
@@ -348,7 +369,7 @@ fn ball_movement(
 fn paddle_movement(
     paused: Res<Paused>,
     mut paddle_query: Query<(&mut Transform, &Paddle)>,
-    time: Res<Time>,
+    time: Res<DilatedTime>,
 ) {
     if paused.0 {
         return;
@@ -420,7 +441,7 @@ struct CollisionPoint;
 #[allow(clippy::too_many_arguments)]
 fn handle_collisions(
     // mut paused: ResMut<Paused>,
-    _time: Res<Time>,
+    _time: Res<DilatedTime>,
     mut collisions: EventReader<Collision>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     existing_points: Query<Entity, With<CollisionPoint>>,
@@ -578,7 +599,7 @@ fn input(paused: Res<Paused>, input: Res<Input<KeyCode>>, mut paddle_query: Quer
     }
 }
 
-// temporary
+// debug
 fn toggle_paused(input: Res<Input<KeyCode>>, mut paused: ResMut<Paused>) {
     if input.just_pressed(KeyCode::Space) {
         paused.0 = true;
@@ -588,7 +609,7 @@ fn toggle_paused(input: Res<Input<KeyCode>>, mut paused: ResMut<Paused>) {
     }
 }
 
-// temporary
+// debug
 fn toggle_screen(input: Res<Input<KeyCode>>, mut window_descriptor: ResMut<WindowDescriptor>) {
     if input.just_pressed(KeyCode::Escape) {
         window_descriptor.mode = match window_descriptor.mode {
@@ -596,6 +617,16 @@ fn toggle_screen(input: Res<Input<KeyCode>>, mut window_descriptor: ResMut<Windo
             WindowMode::BorderlessFullscreen => WindowMode::Windowed,
             _ => unreachable!(),
         }
+    }
+}
+
+// debug
+fn change_dilation(input: Res<Input<KeyCode>>, mut time: ResMut<DilatedTime>) {
+    if input.just_pressed(KeyCode::NumpadAdd) {
+        time.dilation *= 2.0;
+    }
+    if input.just_pressed(KeyCode::NumpadSubtract) {
+        time.dilation *= 0.5;
     }
 }
 
@@ -741,6 +772,76 @@ fn wrap(mut num: f32, lower: f32, upper: f32) -> f32 {
     num
 }
 
+fn polygon(radius: f64, sides: usize) -> Mesh {
+    const NORMAL: [f32; 3] = [0.0, 0.0, 1.0];
+
+    let step = 2. * std::f64::consts::PI / sides as f64;
+
+    let mut positions = Vec::with_capacity(sides + 1);
+    positions.push([0.0f32, 0., 0.]); // the centre
+
+    let mut uvs = Vec::with_capacity(sides + 1);
+    uvs.push([0.5f32, 0.5]); // the centre
+
+    let mut normals = Vec::new();
+    normals.resize(sides + 1, NORMAL);
+
+    let mut indices = Vec::with_capacity(3 * sides);
+
+    // let vertex_data = (0..sides)
+    //     .map(|index| {
+    //         let angle = index as f64 * step;
+    //         let x = radius * angle.cos();
+    //         let y = radius * angle.sin();
+    //         let u = (x + 1.) / 2.;
+    //         let v = (1. - y) / 2.;
+    //         let position = [x as f32, y as f32, 0.];
+    //         let uv = [u as f32, v as f32];
+    //         let triangle_indices = if index + 1 == sides {
+    //             [0, 1, index + 1]
+    //         } else {
+    //             [0, index + 2, index + 1] // 0 being the centre
+    //         };
+    //         (position, uv, triangle_indices)
+    //     })
+    //     .collect::<Vec<_>>();
+
+    // for (position, uv, [a, b, c]) in vertex_data {
+    //     positions.push(position);
+    //     uvs.push(uv);
+    //     indices.push(a as u32);
+    //     indices.push(b as u32);
+    //     indices.push(c as u32);
+    // }
+
+    for index in 0..sides {
+        let angle = index as f64 * step;
+        let x = radius * angle.cos();
+        let y = radius * angle.sin();
+        let u = (x + 1.) / 2.;
+        let v = (1. - y) / 2.;
+        let position = [x as f32, y as f32, 0.];
+        let uv = [u as f32, v as f32];
+        let [a, b, c] = if index + 1 == sides {
+            [0, 1, index + 1] // index 0 being the centre
+        } else {
+            [0, index + 2, index + 1] // index 0 being the centre
+        };
+        positions.push(position);
+        uvs.push(uv);
+        indices.push(a as u32);
+        indices.push(b as u32);
+        indices.push(c as u32);
+    }
+
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+    mesh.set_indices(Some(Indices::U32(indices)));
+    mesh.set_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.set_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh
+}
+
 // Rendering systems
 
 #[derive(Default)]
@@ -748,3 +849,63 @@ struct PastTransform(Transform);
 
 #[derive(Default)]
 struct FutureTransform(Transform);
+
+#[test]
+fn test_lerp() {
+    const ERROR: f32 = 0.000001;
+
+    let color = Color::WHITE;
+    let other_color = Color::BLACK;
+
+    // interpolation in sRGB colorspace
+
+    let target_color = Color::rgba(0.5, 0.5, 0.5, 1.0);
+    let new_color = Color::from(Vec4::from(color).lerp(Vec4::from(other_color), 0.5));
+    assert!((new_color.r() - target_color.r()).abs() < ERROR);
+    assert!((new_color.g() - target_color.g()).abs() < ERROR);
+    assert!((new_color.b() - target_color.b()).abs() < ERROR);
+    assert!((new_color.a() - target_color.a()).abs() < ERROR);
+
+    // interpolation in linear RGB colorspace
+
+    let target_color = Color::rgba_linear(0.5, 0.5, 0.5, 1.0);
+    let new_color_vec = Vec4::new(
+        color.r_linear(),
+        color.g_linear(),
+        color.b_linear(),
+        color.a(),
+    )
+    .lerp(
+        Vec4::new(
+            other_color.r_linear(),
+            other_color.g_linear(),
+            other_color.b_linear(),
+            other_color.a(),
+        ),
+        0.5,
+    );
+    let new_color = Color::rgba_linear(
+        new_color_vec.x,
+        new_color_vec.y,
+        new_color_vec.z,
+        new_color_vec.w,
+    );
+    assert!((new_color.r() - target_color.r()).abs() < ERROR);
+    assert!((new_color.g() - target_color.g()).abs() < ERROR);
+    assert!((new_color.b() - target_color.b()).abs() < ERROR);
+    assert!((new_color.a() - target_color.a()).abs() < ERROR);
+    dbg!(new_color.r());
+    dbg!(new_color.r_linear());
+}
+
+#[test]
+fn construct_triangles() {
+    let triangle = polygon(1.0, 3);
+    dbg!(triangle);
+    let diamond = polygon(1.0, 4);
+    dbg!(diamond);
+    let pentagon = polygon(1.0, 5);
+    dbg!(pentagon);
+    let hexagon = polygon(1.0, 6);
+    dbg!(hexagon);
+}
