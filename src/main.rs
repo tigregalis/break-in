@@ -788,32 +788,6 @@ fn polygon(radius: f64, sides: usize) -> Mesh {
 
     let mut indices = Vec::with_capacity(3 * sides);
 
-    // let vertex_data = (0..sides)
-    //     .map(|index| {
-    //         let angle = index as f64 * step;
-    //         let x = radius * angle.cos();
-    //         let y = radius * angle.sin();
-    //         let u = (x + 1.) / 2.;
-    //         let v = (1. - y) / 2.;
-    //         let position = [x as f32, y as f32, 0.];
-    //         let uv = [u as f32, v as f32];
-    //         let triangle_indices = if index + 1 == sides {
-    //             [0, 1, index + 1]
-    //         } else {
-    //             [0, index + 2, index + 1] // 0 being the centre
-    //         };
-    //         (position, uv, triangle_indices)
-    //     })
-    //     .collect::<Vec<_>>();
-
-    // for (position, uv, [a, b, c]) in vertex_data {
-    //     positions.push(position);
-    //     uvs.push(uv);
-    //     indices.push(a as u32);
-    //     indices.push(b as u32);
-    //     indices.push(c as u32);
-    // }
-
     for index in 0..sides {
         let angle = index as f64 * step;
         let x = radius * angle.cos();
@@ -849,54 +823,6 @@ struct PastTransform(Transform);
 
 #[derive(Default)]
 struct FutureTransform(Transform);
-
-#[test]
-fn test_lerp() {
-    const ERROR: f32 = 0.000001;
-
-    let color = Color::WHITE;
-    let other_color = Color::BLACK;
-
-    // interpolation in sRGB colorspace
-
-    let target_color = Color::rgba(0.5, 0.5, 0.5, 1.0);
-    let new_color = Color::from(Vec4::from(color).lerp(Vec4::from(other_color), 0.5));
-    assert!((new_color.r() - target_color.r()).abs() < ERROR);
-    assert!((new_color.g() - target_color.g()).abs() < ERROR);
-    assert!((new_color.b() - target_color.b()).abs() < ERROR);
-    assert!((new_color.a() - target_color.a()).abs() < ERROR);
-
-    // interpolation in linear RGB colorspace
-
-    let target_color = Color::rgba_linear(0.5, 0.5, 0.5, 1.0);
-    let new_color_vec = Vec4::new(
-        color.r_linear(),
-        color.g_linear(),
-        color.b_linear(),
-        color.a(),
-    )
-    .lerp(
-        Vec4::new(
-            other_color.r_linear(),
-            other_color.g_linear(),
-            other_color.b_linear(),
-            other_color.a(),
-        ),
-        0.5,
-    );
-    let new_color = Color::rgba_linear(
-        new_color_vec.x,
-        new_color_vec.y,
-        new_color_vec.z,
-        new_color_vec.w,
-    );
-    assert!((new_color.r() - target_color.r()).abs() < ERROR);
-    assert!((new_color.g() - target_color.g()).abs() < ERROR);
-    assert!((new_color.b() - target_color.b()).abs() < ERROR);
-    assert!((new_color.a() - target_color.a()).abs() < ERROR);
-    dbg!(new_color.r());
-    dbg!(new_color.r_linear());
-}
 
 #[test]
 fn construct_triangles() {

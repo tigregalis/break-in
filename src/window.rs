@@ -63,9 +63,6 @@ pub fn compare_window(
     if prev.cursor_locked != curr.cursor_locked {
         window.set_cursor_lock_mode(curr.cursor_locked);
     }
-    // if !matches!(prev.mode, curr.mode) {
-    //     window.set_mode(curr.mode);
-    // }
     match (prev.mode, curr.mode) {
         (WindowMode::Windowed, WindowMode::Windowed)
         | (WindowMode::BorderlessFullscreen, WindowMode::BorderlessFullscreen) => {}
